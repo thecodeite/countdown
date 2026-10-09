@@ -8,6 +8,8 @@ export interface CountdownConfig {
   target: DateTime
   title: string
   workingDays: boolean
+  /** Show remaining time counting only Mon–Fri, 09:00–17:00. */
+  workingHours: boolean
 }
 
 export type ParseResult =
@@ -34,6 +36,7 @@ export function parseSearch(search: string): ParseResult {
       target,
       title: params.get('title') ?? '',
       workingDays: params.get('workdays') === '1',
+      workingHours: params.get('workinghours') === '1',
     },
   }
 }
@@ -43,6 +46,7 @@ export function buildSearch(config: CountdownConfig): string {
   params.set('date', config.target.toISO({ suppressMilliseconds: true })!)
   if (config.title.trim()) params.set('title', config.title.trim())
   if (config.workingDays) params.set('workdays', '1')
+  if (config.workingHours) params.set('workinghours', '1')
   return `?${params.toString()}`
 }
 
@@ -53,10 +57,14 @@ export interface Parts {
   seconds: number
 }
 
-export function remainingParts(now: DateTime, target: DateTime): Parts {
-  let total = Math.max(0, Math.floor((target.toMillis() - now.toMillis()) / 1000))
-  const days = Math.floor(total / 86400)
-  total -= days * 86400
+export function remainingParts(now: DateTime, target: DateTime, dayLength = 86400): Parts {
+  return splitSeconds(Math.max(0, Math.floor((target.toMillis() - now.toMillis()) / 1000)), dayLength)
+}
+
+/** Splits seconds into d/h/m/s; without a dayLength, everything above minutes is reported as hours. */
+function splitSeconds(total: number, dayLength?: number): Parts {
+  const days = dayLength ? Math.floor(total / dayLength) : 0
+  total -= days * (dayLength ?? 0)
   const hours = Math.floor(total / 3600)
   total -= hours * 3600
   const minutes = Math.floor(total / 60)
@@ -65,20 +73,44 @@ export function remainingParts(now: DateTime, target: DateTime): Parts {
 
 /**
  * Counts Mon–Fri days in [now, target] whose 09:00–17:00 window overlaps the
- * remaining range. Days are evaluated in the target's timezone.
+ * remaining range. Days are evaluated in the viewer's IANA zone.
  */
-export function workingDaysUntil(now: DateTime, target: DateTime): number {
+export function workingDaysUntil(now: DateTime, target: DateTime, zone = localZone()): number {
   if (target <= now) return 0
-  const zone = target.zone
   const from = now.setZone(zone)
+  const end = target.setZone(zone)
   let count = 0
-  for (let day = from.startOf('day'); day <= target; day = day.plus({ days: 1 }).startOf('day')) {
+  for (let day = from.startOf('day'); day <= end; day = day.plus({ days: 1 }).startOf('day')) {
     if (day.weekday > 5) continue
     const open = day.set({ hour: WORK_START_HOUR })
     const close = day.set({ hour: WORK_END_HOUR })
-    if (from < close && target > open) count++
+    if (from < close && end > open) count++
   }
   return count
+}
+
+/**
+ * Seconds of Mon–Fri 09:00–17:00 time between now and target, evaluated in the
+ * viewer's IANA zone (so BST/GMT changes apply even when the target is a fixed
+ * offset). Partial first/last days only count the part inside the window.
+ */
+export function workingSecondsUntil(now: DateTime, target: DateTime, zone = localZone()): number {
+  if (target <= now) return 0
+  const from = now.setZone(zone)
+  const end = target.setZone(zone)
+  let total = 0
+  for (let day = from.startOf('day'); day <= end; day = day.plus({ days: 1 }).startOf('day')) {
+    if (day.weekday > 5) continue
+    const open = DateTime.max(day.set({ hour: WORK_START_HOUR }), from)
+    const close = DateTime.min(day.set({ hour: WORK_END_HOUR }), end)
+    if (close > open) total += (close.toMillis() - open.toMillis()) / 1000
+  }
+  return Math.floor(total)
+}
+
+/** Working time remaining as hours/minutes/seconds only (days is always 0). */
+export function workingParts(now: DateTime, target: DateTime, zone?: string): Parts {
+  return splitSeconds(workingSecondsUntil(now, target, zone))
 }
 
 /** Zones offered in the dialog: all IANA zones, plus the browser's own. */

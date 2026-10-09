@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { DateTime } from 'luxon'
-import { remainingParts, workingDaysUntil, type CountdownConfig } from '../lib/countdown'
+import { remainingParts, workingDaysUntil, workingParts, type CountdownConfig } from '../lib/countdown'
 
 function Unit({ value, label }: { value: number; label: string }) {
   return (
@@ -12,17 +12,17 @@ function Unit({ value, label }: { value: number; label: string }) {
 }
 
 export default function CountdownDisplay({ config, now }: { config: CountdownConfig; now: DateTime }) {
-  const { target, title, workingDays } = config
+  const { target, title, workingDays, workingHours } = config
   const done = target <= now
-  const parts = remainingParts(now, target)
+  const parts = workingHours ? workingParts(now, target) : remainingParts(now, target)
   const workdays = workingDays ? workingDaysUntil(now, target) : null
 
   // Screen readers get a once-a-minute summary instead of a ticking clock.
   const minuteKey = Math.floor(now.toMillis() / 60000)
   const summary = useMemo(
-    () => (done ? `${title || 'Countdown'} has arrived` : `${parts.days} days, ${parts.hours} hours and ${parts.minutes} minutes remaining`),
+    () => (done ? `${title || 'Countdown'} has arrived` : `${workingHours ? '' : `${parts.days} days, `}${parts.hours} ${workingHours ? 'working hours' : 'hours'} and ${parts.minutes} minutes remaining`),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [minuteKey, done, title],
+    [minuteKey, done, title, workingHours],
   )
 
   return (
@@ -32,11 +32,14 @@ export default function CountdownDisplay({ config, now }: { config: CountdownCon
         <p className="text-5xl font-semibold sm:text-7xl">It's here!</p>
       ) : (
         <div aria-hidden="true" className="flex flex-wrap justify-center gap-2 sm:gap-4">
-          <Unit value={parts.days} label="Days" />
+          {!workingHours && <Unit value={parts.days} label="Days" />}
           <Unit value={parts.hours} label="Hours" />
           <Unit value={parts.minutes} label="Minutes" />
           <Unit value={parts.seconds} label="Seconds" />
         </div>
+      )}
+      {workingHours && !done && (
+        <p className="text-sm text-slate-500 dark:text-slate-400">Working hours only (Mon–Fri, 09:00–17:00)</p>
       )}
       {workdays !== null && !done && (
         <p className="text-lg text-slate-600 dark:text-slate-300">
