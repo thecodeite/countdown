@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { DateTime } from 'luxon'
-import { remainingParts, workingDaysUntil, workingParts, type CountdownConfig } from '../lib/countdown'
+import { formatMoney } from '../lib/earn'
+import { remainingParts, workingDaysUntil, workingParts, workingSecondsUntil, WORK_END_HOUR, WORK_START_HOUR, type CountdownConfig } from '../lib/countdown'
 
 function Unit({ value, label }: { value: number; label: string }) {
   return (
@@ -12,12 +13,14 @@ function Unit({ value, label }: { value: number; label: string }) {
 }
 
 export default function CountdownDisplay({ config, now }: { config: CountdownConfig; now: DateTime }) {
-  const { target, title, workingDays, workingDaysPrimary, workingHours } = config
+  const { target, title, earn, workingDays, workingDaysPrimary, workingHours } = config
   const done = target <= now
   const primary = workingDays && workingDaysPrimary
   const workOnly = primary || workingHours
   const parts = workOnly ? workingParts(now, target, undefined, primary) : remainingParts(now, target)
   const workdays = workingDays && !primary ? workingDaysUntil(now, target) : null
+
+  const left = earn ? (workingSecondsUntil(now, target) / ((WORK_END_HOUR - WORK_START_HOUR) * 3600)) * earn.daily : null
 
   // Screen readers get a once-a-minute summary instead of a ticking clock.
   const minuteKey = Math.floor(now.toMillis() / 60000)
@@ -46,6 +49,11 @@ export default function CountdownDisplay({ config, now }: { config: CountdownCon
       {workdays !== null && !done && (
         <p className="text-lg text-slate-600 dark:text-slate-300">
           <span className="font-semibold tabular-nums">{workdays}</span> working {workdays === 1 ? 'day' : 'days'} remaining
+        </p>
+      )}
+      {earn && left !== null && !done && (
+        <p className="text-lg text-slate-600 dark:text-slate-300">
+          <span className="font-semibold tabular-nums">{formatMoney(left, earn.currency)}</span> left to earn
         </p>
       )}
       <p className="text-sm text-slate-500 dark:text-slate-400">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { DateTime } from 'luxon'
-import { fromLocalInput, localZone, timeZones, zoneForTarget, type CountdownConfig } from '../lib/countdown'
+import { fromLocalInput, localZone, timeZones, workingDaysUntil, zoneForTarget, type CountdownConfig } from '../lib/countdown'
+import { defaultCurrency, earnFromFixed, formatEarn, parseAmount, parseEarn } from '../lib/earn'
 
 interface Props {
   open: boolean
@@ -22,6 +23,8 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
   const [workingDays, setWorkingDays] = useState(false)
   const [workingDaysPrimary, setWorkingDaysPrimary] = useState(false)
   const [workingHours, setWorkingHours] = useState(false)
+  const [rate, setRate] = useState('')
+  const [fixed, setFixed] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -36,6 +39,7 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
         setWorkingDays(initial.workingDays)
         setWorkingDaysPrimary(initial.workingDaysPrimary)
         setWorkingHours(initial.workingHours)
+        setRate(initial.earn ? formatEarn(initial.earn) : '')
       } else {
         setZone(localZone())
         setDatetime(DateTime.now().plus({ days: 1 }).startOf('hour').toFormat(INPUT_FORMAT))
@@ -43,7 +47,9 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
         setWorkingDays(false)
         setWorkingDaysPrimary(false)
         setWorkingHours(false)
+        setRate('')
       }
+      setFixed('')
       setError('')
       dialog.showModal()
     } else if (!open && dialog.open) {
@@ -58,7 +64,23 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
       setError('Please choose a valid date and time.')
       return
     }
-    onSubmit({ target, title, workingDays, workingDaysPrimary: workingDays && workingDaysPrimary, workingHours })
+    let earn = null
+    if (fixed.trim()) {
+      const parsed = parseAmount(fixed)
+      const days = workingDaysUntil(DateTime.now(), target)
+      earn = parsed && earnFromFixed(parsed.amount, parsed.currency ?? defaultCurrency(), days)
+      if (!earn) {
+        setError(days < 1 ? 'There are no working days left before the target date.' : 'Enter the fixed amount as a number, e.g. £5,000.')
+        return
+      }
+    } else if (rate.trim()) {
+      earn = parseEarn(rate)
+      if (!earn) {
+        setError('Enter the earnings rate like £450/d, 2000/m or $50,000/y.')
+        return
+      }
+    }
+    onSubmit({ target, title, workingDays, workingDaysPrimary: workingDays && workingDaysPrimary, workingHours, earn })
   }
 
   return (
@@ -105,6 +127,16 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
         <label className="flex items-center gap-2 text-sm font-medium">
           <input type="checkbox" className="size-4" checked={workingHours} onChange={(e) => setWorkingHours(e.target.checked)} />
           Count working hours only (Mon–Fri, 09:00–17:00)
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Left to earn – rate (optional)
+          <input className={field} value={rate} onChange={(e) => setRate(e.target.value)} placeholder="£450/d, 2000/m or $50,000/y" />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          …or a fixed amount to earn by the target
+          <input className={field} value={fixed} onChange={(e) => setFixed(e.target.value)} placeholder="£5,000 (replaces the rate above)" />
         </label>
 
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}

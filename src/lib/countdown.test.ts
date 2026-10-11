@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DateTime } from 'luxon'
+import { parseEarn, parseLocaleNumber, formatEarn, earnFromFixed } from './earn'
 import { buildSearch, parseSearch, remainingParts, workingDaysUntil, workingParts, workingSecondsUntil } from './countdown'
 
 const at = (iso: string) => DateTime.fromISO(iso, { setZone: true })
@@ -101,5 +102,44 @@ describe('search params', () => {
     expect(parseSearch('').status).toBe('empty')
     expect(parseSearch('?date=2026-12-25T09:00').status).toBe('invalid')
     expect(parseSearch('?date=nonsenseZ').status).toBe('invalid')
+  })
+})
+
+describe('leftToEarn', () => {
+  it('parses units into a daily rate', () => {
+    expect(parseEarn('£450/d', 'en-GB')).toEqual({ daily: 450, currency: 'GBP' })
+    expect(parseEarn('2000/m', 'en-GB')).toEqual({ daily: 24000 / 260, currency: 'GBP' })
+    expect(parseEarn('$50,000/y', 'en-US')).toEqual({ daily: 50000 / 260, currency: 'USD' })
+  })
+  it('defaults currency from the locale, falling back to GBP', () => {
+    expect(parseEarn('100/d', 'en-US')?.currency).toBe('USD')
+    expect(parseEarn('100/d', 'de-DE')?.currency).toBe('EUR')
+    expect(parseEarn('100/d', 'xx')?.currency).toBe('GBP')
+  })
+  it('uses locale separators', () => {
+    expect(parseLocaleNumber('50.000', 'de-DE')).toBe(50000)
+    expect(parseLocaleNumber('50,000', 'en-GB')).toBe(50000)
+    expect(parseLocaleNumber('1.234,5', 'de-DE')).toBe(1234.5)
+    expect(parseLocaleNumber('123.4567', 'de-DE')).toBe(123.4567)
+  })
+  it('rejects malformed values', () => {
+    expect(parseEarn('450', 'en-GB')).toBeNull()
+    expect(parseEarn('£450/w', 'en-GB')).toBeNull()
+    expect(parseEarn('abc/d', 'en-GB')).toBeNull()
+  })
+  it('formats rates so they survive any locale', () => {
+    expect(formatEarn({ daily: 450, currency: 'GBP' })).toBe('£450/d')
+    expect(formatEarn({ daily: 123.456, currency: 'GBP' })).toBe('£123.4560/d')
+    expect(parseEarn(formatEarn({ daily: 123.456, currency: 'GBP' }), 'de-DE')?.daily).toBeCloseTo(123.456)
+  })
+  it('converts a fixed amount to a daily rate', () => {
+    expect(earnFromFixed(1000, 'GBP', 4)).toEqual({ daily: 250, currency: 'GBP' })
+    expect(earnFromFixed(1000, 'GBP', 0)).toBeNull()
+  })
+  it('round-trips via the URL', () => {
+    const res = parseSearch('?date=2026-12-25T09:00:00Z&leftToEarn=%C2%A3450%2Fd')
+    if (res.status !== 'ok') throw new Error('expected ok')
+    expect(res.config.earn).toEqual({ daily: 450, currency: 'GBP' })
+    expect(buildSearch(res.config)).toContain('leftToEarn=%C2%A3450%2Fd')
   })
 })

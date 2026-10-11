@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { formatEarn, parseEarn, type Earn } from './earn'
 
 export const WORK_START_HOUR = 9
 export const WORK_END_HOUR = 17
@@ -12,6 +13,8 @@ export interface CountdownConfig {
   workingDaysPrimary: boolean
   /** Show remaining time counting only Mon–Fri, 09:00–17:00. */
   workingHours: boolean
+  /** Daily earning rate (leftToEarn). */
+  earn: Earn | null
 }
 
 export type ParseResult =
@@ -33,6 +36,7 @@ export function parseSearch(search: string): ParseResult {
   const target = DateTime.fromISO(iso, { setZone: true })
   if (!target.isValid) return { status: 'invalid', message: `"${raw}" is not a valid date.` }
   const workdays = params.get('workdays')
+  const leftToEarn = params.get('leftToEarn')
   return {
     status: 'ok',
     config: {
@@ -41,6 +45,7 @@ export function parseSearch(search: string): ParseResult {
       workingDays: workdays === '1' || workdays === 'primary',
       workingDaysPrimary: workdays === 'primary',
       workingHours: params.get('workinghours') === '1',
+      earn: leftToEarn ? parseEarn(leftToEarn) : null,
     },
   }
 }
@@ -51,6 +56,7 @@ export function buildSearch(config: CountdownConfig): string {
   if (config.title.trim()) params.set('title', config.title.trim())
   if (config.workingDays) params.set('workdays', config.workingDaysPrimary ? 'primary' : '1')
   if (config.workingHours) params.set('workinghours', '1')
+  if (config.earn) params.set('leftToEarn', formatEarn(config.earn))
   return `?${params.toString()}`
 }
 
