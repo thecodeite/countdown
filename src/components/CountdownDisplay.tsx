@@ -12,17 +12,19 @@ function Unit({ value, label }: { value: number; label: string }) {
 }
 
 export default function CountdownDisplay({ config, now }: { config: CountdownConfig; now: DateTime }) {
-  const { target, title, workingDays, workingHours } = config
+  const { target, title, workingDays, workingDaysPrimary, workingHours } = config
   const done = target <= now
-  const parts = workingHours ? workingParts(now, target) : remainingParts(now, target)
-  const workdays = workingDays ? workingDaysUntil(now, target) : null
+  const primary = workingDays && workingDaysPrimary
+  const workOnly = primary || workingHours
+  const parts = workOnly ? workingParts(now, target, undefined, primary) : remainingParts(now, target)
+  const workdays = workingDays && !primary ? workingDaysUntil(now, target) : null
 
   // Screen readers get a once-a-minute summary instead of a ticking clock.
   const minuteKey = Math.floor(now.toMillis() / 60000)
   const summary = useMemo(
-    () => (done ? `${title || 'Countdown'} has arrived` : `${workingHours ? '' : `${parts.days} days, `}${parts.hours} ${workingHours ? 'working hours' : 'hours'} and ${parts.minutes} minutes remaining`),
+    () => (done ? `${title || 'Countdown'} has arrived` : `${workOnly && !primary ? '' : `${parts.days} ${primary ? 'working days' : 'days'}, `}${parts.hours} ${workOnly ? 'working hours' : 'hours'} and ${parts.minutes} minutes remaining`),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [minuteKey, done, title, workingHours],
+    [minuteKey, done, title, workOnly, primary],
   )
 
   return (
@@ -32,14 +34,14 @@ export default function CountdownDisplay({ config, now }: { config: CountdownCon
         <p className="text-5xl font-semibold sm:text-7xl">It's here!</p>
       ) : (
         <div aria-hidden="true" className="flex flex-wrap justify-center gap-2 sm:gap-4">
-          {!workingHours && <Unit value={parts.days} label="Days" />}
+          {(!workOnly || primary) && <Unit value={parts.days} label={primary ? 'Working days' : 'Days'} />}
           <Unit value={parts.hours} label="Hours" />
           <Unit value={parts.minutes} label="Minutes" />
           <Unit value={parts.seconds} label="Seconds" />
         </div>
       )}
-      {workingHours && !done && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Working hours only (Mon–Fri, 09:00–17:00)</p>
+      {workOnly && !done && (
+        <p className="text-sm text-slate-500 dark:text-slate-400">{primary ? 'Paused outside working hours' : 'Working hours only'} (Mon–Fri, 09:00–17:00)</p>
       )}
       {workdays !== null && !done && (
         <p className="text-lg text-slate-600 dark:text-slate-300">

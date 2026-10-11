@@ -8,6 +8,8 @@ export interface CountdownConfig {
   target: DateTime
   title: string
   workingDays: boolean
+  /** With workingDays: working time replaces calendar time as the only countdown (workdays=primary). */
+  workingDaysPrimary: boolean
   /** Show remaining time counting only Mon–Fri, 09:00–17:00. */
   workingHours: boolean
 }
@@ -30,12 +32,14 @@ export function parseSearch(search: string): ParseResult {
   }
   const target = DateTime.fromISO(iso, { setZone: true })
   if (!target.isValid) return { status: 'invalid', message: `"${raw}" is not a valid date.` }
+  const workdays = params.get('workdays')
   return {
     status: 'ok',
     config: {
       target,
       title: params.get('title') ?? '',
-      workingDays: params.get('workdays') === '1',
+      workingDays: workdays === '1' || workdays === 'primary',
+      workingDaysPrimary: workdays === 'primary',
       workingHours: params.get('workinghours') === '1',
     },
   }
@@ -45,7 +49,7 @@ export function buildSearch(config: CountdownConfig): string {
   const params = new URLSearchParams()
   params.set('date', config.target.toISO({ suppressMilliseconds: true })!)
   if (config.title.trim()) params.set('title', config.title.trim())
-  if (config.workingDays) params.set('workdays', '1')
+  if (config.workingDays) params.set('workdays', config.workingDaysPrimary ? 'primary' : '1')
   if (config.workingHours) params.set('workinghours', '1')
   return `?${params.toString()}`
 }
@@ -108,9 +112,9 @@ export function workingSecondsUntil(now: DateTime, target: DateTime, zone = loca
   return Math.floor(total)
 }
 
-/** Working time remaining as hours/minutes/seconds only (days is always 0). */
-export function workingParts(now: DateTime, target: DateTime, zone?: string): Parts {
-  return splitSeconds(workingSecondsUntil(now, target, zone))
+/** Working time remaining as hours/minutes/seconds, or with working days (8h each) when withDays is set. */
+export function workingParts(now: DateTime, target: DateTime, zone?: string, withDays = false): Parts {
+  return splitSeconds(workingSecondsUntil(now, target, zone), withDays ? (WORK_END_HOUR - WORK_START_HOUR) * 3600 : undefined)
 }
 
 /** Zones offered in the dialog: all IANA zones, plus the browser's own. */

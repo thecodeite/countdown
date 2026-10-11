@@ -81,6 +81,13 @@ describe('search params', () => {
     expect(res.config.workingHours).toBe(false)
     expect(buildSearch(res.config)).toBe('?date=2026-12-25T09%3A00%3A00%2B01%3A00&title=Xmas&workdays=1')
   })
+  it('round-trips workdays=primary', () => {
+    const res = parseSearch('?date=2026-12-25T09:00:00Z&workdays=primary')
+    if (res.status !== 'ok') throw new Error('expected ok')
+    expect(res.config.workingDays).toBe(true)
+    expect(res.config.workingDaysPrimary).toBe(true)
+    expect(buildSearch(res.config)).toContain('workdays=primary')
+  })
   it('round-trips workinghours', () => {
     const res = parseSearch('?date=2026-12-25T09:00:00Z&workinghours=1')
     if (res.status !== 'ok') throw new Error('expected ok')

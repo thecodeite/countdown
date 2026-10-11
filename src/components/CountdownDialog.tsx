@@ -20,6 +20,7 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
   const [datetime, setDatetime] = useState('')
   const [zone, setZone] = useState(localZone())
   const [workingDays, setWorkingDays] = useState(false)
+  const [workingDaysPrimary, setWorkingDaysPrimary] = useState(false)
   const [workingHours, setWorkingHours] = useState(false)
   const [error, setError] = useState('')
 
@@ -33,12 +34,14 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
         setDatetime(initial.target.setZone(z).toFormat(INPUT_FORMAT))
         setTitle(initial.title)
         setWorkingDays(initial.workingDays)
+        setWorkingDaysPrimary(initial.workingDaysPrimary)
         setWorkingHours(initial.workingHours)
       } else {
         setZone(localZone())
         setDatetime(DateTime.now().plus({ days: 1 }).startOf('hour').toFormat(INPUT_FORMAT))
         setTitle('')
         setWorkingDays(false)
+        setWorkingDaysPrimary(false)
         setWorkingHours(false)
       }
       setError('')
@@ -55,7 +58,7 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
       setError('Please choose a valid date and time.')
       return
     }
-    onSubmit({ target, title, workingDays, workingHours })
+    onSubmit({ target, title, workingDays, workingDaysPrimary: workingDays && workingDaysPrimary, workingHours })
   }
 
   return (
@@ -91,6 +94,13 @@ export default function CountdownDialog({ open, initial, onSubmit, onClose }: Pr
           <input type="checkbox" className="size-4" checked={workingDays} onChange={(e) => setWorkingDays(e.target.checked)} />
           Show working days remaining (Mon–Fri, 09:00–17:00)
         </label>
+
+        {workingDays && (
+          <label className="flex items-center gap-2 pl-6 text-sm font-medium">
+            <input type="checkbox" className="size-4" checked={workingDaysPrimary} onChange={(e) => setWorkingDaysPrimary(e.target.checked)} />
+            Use working days as the only countdown (pauses outside working hours)
+          </label>
+        )}
 
         <label className="flex items-center gap-2 text-sm font-medium">
           <input type="checkbox" className="size-4" checked={workingHours} onChange={(e) => setWorkingHours(e.target.checked)} />
